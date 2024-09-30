@@ -1,0 +1,71 @@
+/* Custom Blog Styles */
+
+/* General page styling */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f8f9fa; /* Light gray background */
+    color: #343a40; /* Dark text */
+}
+
+/* Navbar styles */
+.navbar {
+    background-color: #343a40; /* Dark gray background */
+    padding: 1rem;
+}
+
+.navbar-brand {
+    color: #fff !important; /* White text for the brand */
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.navbar-nav .nav-link {
+    color: #fff !important; /* White text for the navbar links */
+}
+
+.navbar-nav .nav-link:hover {
+    background-color: #495057; /* Slightly lighter background on hover */
+}
+
+/* Main content */
+main {
+    padding-top: 2rem;
+}
+
+/* Card styles for blog posts */
+.card {
+    margin-bottom: 2rem;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Light shadow */
+}
+
+.card-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.card-text {
+    font-size: 1rem;
+    color: #6c757d;
+}
+
+.card-footer {
+    background-color: #fff;
+    border-top: none;
+    color: #6c757d;
+}
+
+/* Footer styles */
+footer {
+    background-color: #343a40;
+    color: #fff;
+    padding: 1rem 0;
+}
+
+footer a {
+    color: #ffc107;
+}
+
+footer a:hover {
+    color: #e0a800;
+}

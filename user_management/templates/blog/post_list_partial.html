@@ -1,0 +1,11 @@
+<div id="post-list" class="mt-5">
+    {% for post in posts %}
+    <div class="card mb-3" id="post-{{ post.id }}" data-created-at="{{ post.created_at }}">
+        <div class="card-body">
+            <h5 class="card-title">{{ post.title }}</h5>
+            <p class="card-text">{{ post.content|slice:":20" }}{% if post.content|length > 20 %}...{% endif %}</p>
+            <p class="text-muted">Posted by {{ post.author.username }} on {{ post.created_at }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
