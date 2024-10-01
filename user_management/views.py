@@ -1,3 +1,5 @@
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.decorators import method_decorator
@@ -47,19 +49,29 @@ class PostCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.author = self.request.user
-        form.instance.created_at = timezone.now()
         post = form.save()
 
-        if self.request.method == 'POST':
-            return JsonResponse({
-                'id': post.id,
-                'title': post.title,
-                'content': post.content,
-                'author': post.author.username,
-                'created_at': post.created_at.strftime('%Y-%m-%d %H:%M')
-            }, status=201)  # Return JSON response
+        # Prepare the post data to send to WebSocket clients
+        post_data = {
+            'id': post.id,
+            'title': post.title,
+            'content': post.content,
+            'author': post.author.username,
+            'created_at': post.created_at.strftime('%Y-%m-%d %H:%M')
+        }
 
-        return super().form_valid(form)
+        # Send the new post to WebSocket clients
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            'posts',  # Group name for posts
+            {
+                'type': 'send_post_update',
+                'action': 'create',
+                'post': post_data
+            }
+        )
+
+        return JsonResponse(post_data, status=201)
 
     def dispatch(self, request, *args, **kwargs):
 
@@ -79,6 +91,22 @@ class PostUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         post = form.save()
+
+        # Send WebSocket message to notify about the updated post
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            "posts",  # WebSocket group name
+            {
+                'type': 'send_post_update',  # This calls send_post_update method in PostConsumer
+                'action': 'update',
+                'post': {
+                    'id': post.id,
+                    'title': post.title,
+                    'content': post.content
+                }
+            }
+        )
+
         if self.request.method == 'POST':
             return JsonResponse({
                 'id': post.id,
@@ -93,9 +121,24 @@ class PostDeleteView(LoginRequiredMixin, DeleteView):
     model = BlogPost
     success_url = reverse_lazy('post_list')
 
-    def delete(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
+        print("in delete")
         post = self.get_object()
+        post_id = post.id
         post.delete()
+
+        # Send WebSocket message
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            "posts",
+            {
+                'type': 'send_post_update',
+                'action': 'delete',
+                'post': {
+                    'id': post_id
+                }
+            }
+        )
 
         if request.method == 'POST':
             return JsonResponse({'status': 'success'})
@@ -149,19 +192,39 @@ def fetch_posts(request):
     return JsonResponse({'posts': posts_data})
 
 
-@login_required
-def post_comment(request, post_id):
+@login_required()
+def add_comment(request, post_id):
     if request.method == 'POST':
-        post = get_object_or_404(BlogPost, id=post_id)
+        post = get_object_or_404(BlogPost, pk=post_id)
+        author = request.user
         content = request.POST.get('content')
+
         if content:
-            comment = Comment.objects.create(post=post, author=request.user, content=content)
-            return JsonResponse({
+            comment = Comment.objects.create(post=post, author=author, content=content)
+            comment_data = {
                 'author': comment.author.username,
                 'content': comment.content,
-                'created_at': comment.created_at.strftime('%Y-%m-%d %H:%M')
-            }, status=201)
-    return JsonResponse({'error': 'Invalid request'}, status=400)
+                'created_at': comment.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+            # Notify via WebSocket
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'comments_{post_id}',
+                {
+                    'type': 'send_comment',
+                    'comment': comment_data
+                }
+            )
+
+            return JsonResponse(comment_data, status=201)
+        return JsonResponse({'error': 'Content is required'}, status=400)
+
+
+def fetch_comments(request, post_id):
+    post = get_object_or_404(BlogPost, pk=post_id)
+    comments = post.comments.all().values('author__username', 'content', 'created_at')
+    return JsonResponse(list(comments), safe=False)
 
 
 @login_required

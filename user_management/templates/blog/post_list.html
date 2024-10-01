@@ -13,6 +13,13 @@
         .spinner-border {
             display: none;
         }
+        .comment {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+        }
+        .comment:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -48,8 +55,24 @@
                         <button class="btn btn-warning btn-sm edit-post-btn"
                             data-id="{{ post.id }}"
                             data-title="{{ post.title|escape }}"
-                            data-content="{{ post.full_content }}">Edit</button>
+                            data-content="{{ post.content }}">Edit</button>
                         <button class="btn btn-danger btn-sm delete-post-btn" data-id="{{ post.id }}">Delete</button>
+                    {% endif %}
+
+                    <!-- Comment Section -->
+                    <h6 class="mt-4">Comments</h6>
+
+                    <!-- Comment List -->
+                    <div id="comments-{{ post.id }}" class="mb-3">
+                        <!-- Comments will be dynamically loaded here -->
+                    </div>
+
+                    <!-- Comment Form -->
+                    {% if user.is_authenticated %}
+                    <div class="comment-section">
+                        <textarea id="comment-content-{{ post.id }}" class="form-control" rows="2" placeholder="Add a comment..."></textarea>
+                        <button class="btn btn-primary mt-2 submit-comment-btn" data-post-id="{{ post.id }}">Submit Comment</button>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -105,15 +128,8 @@
         </div>
     </div>
 
-    <script type="text/javascript">
+<script type="text/javascript">
     $(document).ready(function () {
-        function initializeSummernote() {
-            $('.summernote').summernote({
-                height: 200
-            });
-        }
-
-
         function showAlert(message, type) {
             $('#alerts-container').html(`<div class="alert alert-${type} alert-dismissible fade show" role="alert">
                 ${message}
@@ -121,141 +137,245 @@
             </div>`);
         }
 
-        function showSpinner(show) {
-            if (show) {
-                $('.spinner-border').show();
-            } else {
-                $('.spinner-border').hide();
+         function showAlert(message, type) {
+            $('#alerts-container').html(`<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>`);
+        }
+
+        function addPostToPage(post) {
+            const isAdmin = "{{ user.user_type }}" === "admin";
+            const userIsAuthenticated = {{ user.is_authenticated|yesno:'true,false' }};
+            const editDeleteButtons = isAdmin ? `
+                <button class="btn btn-warning btn-sm edit-post-btn" data-id="${post.id}" data-title="${post.title}" data-content="${post.content}">Edit</button>
+                <button class="btn btn-danger btn-sm delete-post-btn" data-id="${post.id}">Delete</button>
+            ` : '';
+
+            const commentSection = `
+                <h6 class="mt-4">Comments</h6>
+                <div id="comments-${post.id}" class="mb-3">
+                    <!-- Dynamically loaded comments will go here -->
+                </div>
+                ${userIsAuthenticated ? `
+                    <div class="comment-section">
+                        <textarea id="comment-content-${post.id}" class="form-control" rows="2" placeholder="Add a comment..."></textarea>
+                        <button class="btn btn-primary mt-2 submit-comment-btn" data-post-id="${post.id}">Submit Comment</button>
+                    </div>
+                ` : ''}
+            `;
+
+            const postHtml = `
+                <div class="card mb-3" id="post-${post.id}">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <a href="/blog/${post.id}/">${post.title}</a>
+                        </h5>
+                        <p class="card-text">${post.content.slice(0, 20)}${post.content.length > 20 ? '...' : ''}</p>
+                        <p class="text-muted">Posted by ${post.author.username} on ${post.created_at}</p>
+                        ${editDeleteButtons}
+                        ${commentSection}
+                    </div>
+                </div>
+            `;
+
+            $('#post-list').prepend(postHtml);  // Prepend the new post to the top of the list
+        }
+
+        function updatePostOnPage(post) {
+            $(`#post-${post.id} .card-title a`).text(post.title);
+            $(`#post-${post.id} .card-text`).html(post.content.slice(0, 20) + (post.content.length > 20 ? '...' : ''));
+
+            const isAdmin = "{{ user.user_type }}" === "admin";
+            if (isAdmin) {
+                $(`#post-${post.id} .edit-post-btn`).data('title', post.title);
+                $(`#post-${post.id} .edit-post-btn`).data('content', post.content);
             }
         }
 
-        const isAdmin = "{{ user.user_type }}" === "admin";
-
-        function attachEventListeners() {
-            $('#post-list').on('click', '.edit-post-btn', function () {
-                const postId = $(this).data('id');
-                const postTitle = $(this).data('title');
-                const postContent = $('<div/>').html($(this).data('content')).text();
-
-                $('#edit-post-id').val(postId);
-                $('#edit-title').val(postTitle);
-                $('#edit-content').summernote('code', postContent);
-
-                $('#editPostModal').modal('show');
-            });
-
-            $('#edit-post-form').submit(function (e) {
-                e.preventDefault();
-
-                const postId = $('#edit-post-id').val();
-                const title = $('#edit-title').val();
-                const content = $('#edit-content').val();
-                const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
-
-                showSpinner(true);
-
-                $.ajax({
-                    url: `/edit-post/${postId}/`,
-                    type: "POST",
-                    headers: { 'X-CSRFToken': csrfToken },
-                    data: {
-                        title: title,
-                        content: content
-                    },
-                    success: function (response) {
-                        $(`#post-${postId} .card-title`).text(response.title);
-                        $(`#post-${postId} .card-text`).html(response.content.substring(0, 20) + (response.content.length > 20 ? '...' : ''));
-
-                        $('#editPostModal').modal('hide');
-                        showAlert('Post updated successfully!', 'success');
-                    },
-                    error: function (error) {
-                        showAlert('Failed to update post. Please try again.', 'danger');
-                    },
-                    complete: function () {
-                        showSpinner(false);
-                    }
-                });
-            });
-
-            $('#post-list').on('click', '.delete-post-btn', function () {
-                const postIdToDelete = $(this).data('id');
-                $('#deletePostModal').modal('show');
-
-                $('#confirm-delete').off('click').on('click', function () {
-                    const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
-
-                    showSpinner(true);
-
-                    $.ajax({
-                        url: `/delete-post/${postIdToDelete}/`,
-                        type: "POST",
-                        headers: { 'X-CSRFToken': csrfToken },
-                        success: function (response) {
-                            $(`#post-${postIdToDelete}`).remove();
-                            $('#deletePostModal').modal('hide');
-                            showAlert('Post deleted successfully!', 'success');
-                        },
-                        error: function (error) {
-                            showAlert('Failed to delete post. Please try again.', 'danger');
-                        },
-                        complete: function () {
-                            showSpinner(false);
-                        }
-                    });
-                });
-            });
+         function deletePostFromPage(postId) {
+            const postElement = $(`#post-${postId}`);
+            console.log("trying to delete", postElement)
+            if (postElement.length) {
+                postElement.remove();
+                console.log(`Post with ID ${postId} has been removed from the page.`);
+            } else {
+                console.error(`Post with ID ${postId} not found in the DOM.`);
+            }
         }
 
-        attachEventListeners();
+        function addCommentToPage(comment, postId) {
+            const commentHtml = `
+                <div class="comment" id="comment-${comment.id}">
+                    <p><strong>${comment.author}</strong> - ${comment.content}</p>
+                    <small class="text-muted">${comment.timestamp}</small>
+                    ${comment.is_admin ? `
+                        <button class="btn btn-sm btn-warning edit-comment-btn" data-id="${comment.id}" data-post-id="${postId}" data-content="${comment.content}">Edit</button>
+                        <button class="btn btn-sm btn-danger delete-comment-btn" data-id="${comment.id}" data-post-id="${postId}">Delete</button>
+                    ` : ''}
+                </div>
+            `;
+            $(`#comments-${postId}`).append(commentHtml);
+        }
 
-        function loadPosts() {
+        function updateCommentOnPage(comment, postId) {
+            const commentEl = $(`#comment-${comment.id}`);
+            commentEl.find('p').html(`<strong>${comment.author}</strong> - ${comment.content}`);
+            commentEl.find('.text-muted').text(comment.timestamp);
+        }
+
+        function deleteCommentFromPage(commentId) {
+            $(`#comment-${commentId}`).remove();
+        }
+
+        const postSocket = new WebSocket(`ws://${window.location.host}/ws/posts/`);
+        postSocket.onopen = function() {
+            console.log("WebSocket connection established.");
+        };
+
+        postSocket.onerror = function (error) {
+            console.error('WebSocket error:', error);
+        };
+        postSocket.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+            const action = data.action;
+            const post = data.post;
+             console.log("WebSocket message received: ", data);
+
+            if (action === 'create') {
+                addPostToPage(post);
+            } else if (action === 'update') {
+                updatePostOnPage(post);
+            } else if (action === 'delete') {
+                deletePostFromPage(post.id);
+            }
+        };
+
+        postSocket.onerror = function (error) {
+            console.error('WebSocket error:', error);
+        };
+
+        $('#post-list').on('click', '.submit-comment-btn', function () {
+            const postId = $(this).data('post-id');
+            const content = $(`#comment-content-${postId}`).val();
+            const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+
+            if (!content.trim()) {
+                showAlert('Comment content cannot be empty.', 'warning');
+                return;
+            }
+
             $.ajax({
-                url: "/fetch-posts/",
-                type: "GET",
+                url: `/add-comment/${postId}/`,
+                type: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                data: { content: content },
                 success: function (response) {
-                    const posts = response.posts;
-                    let postHtml = '';
-
-                    posts.forEach(function(post) {
-                        postHtml += `
-                        <div class="card mb-3" id="post-${post.id}">
-                            <div class="card-body">
-                               <h5 class="card-title">
-                                  <a href="/post/${post.id}/">${post.title}</a>
-                               </h5>
-                                <p class="card-text">${$('<div/>').html(post.content).text().substring(0, 20)}${post.content.length > 20 ? '...' : ''}</p>
-                                <p class="text-muted">Posted by ${post.author} on ${post.created_at}</p>`;
-
-                        if (isAdmin) {
-                            postHtml += `
-                            <button class="btn btn-warning btn-sm edit-post-btn" data-id="${post.id}" data-title="${post.title}" data-content="${$('<div/>').html(post.full_content).text()}">Edit</button>
-                            <button class="btn btn-danger btn-sm delete-post-btn" data-id="${post.id}">Delete</button>`;
-                        }
-
-                        postHtml += `</div></div>`;
-                    });
-
-                    $('#post-list').html(postHtml);
-                    attachEventListeners();
+                    $(`#comment-content-${postId}`).val('');
+                    showAlert('Comment added successfully!', 'success');
+                    addCommentToPage(response.comment, postId);
                 },
-                error: function (error) {
-                    showAlert('Error fetching posts.', 'danger');
+                error: function () {
+                    showAlert('Failed to add comment. Please try again.', 'danger');
                 }
             });
-        }
-
-        setInterval(loadPosts, 2000);
-    });
-    </script>
-
-  <script>
-        window.addEventListener("pageshow", function(event) {
-            if (event.persisted || (window.performance && window.performance.navigation.type == 2)) {
-                // Force page reload when back navigation is detected
-                window.location.reload();
-            }
         });
-    </script>
+
+        $('#edit-post-form').submit(function (e) {
+            e.preventDefault();
+
+            const postId = $('#edit-post-id').val();
+            const title = $('#edit-title').val();
+            const content = $('#edit-content').val();
+            const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+            console.log(`Updating post ID: ${postId}`);
+            console.log(`New post title: ${title}`);
+            console.log(`New post content: ${content}`);
+            $.ajax({
+                url: `/edit-post/${postId}/`,
+                type: "POST",
+                headers: { 'X-CSRFToken': csrfToken },
+                data: { title, content },
+                success: function (response) {
+                            console.log('Success response:', response);
+
+                    postSocket.send(JSON.stringify({
+                        action: 'update',
+                        post: response
+                    }));
+                    $('#editPostModal').modal('hide');
+                    showAlert('Post updated successfully!', 'success');
+                },
+                error: function () {
+                    showAlert('Failed to update post. Please try again.', 'danger');
+                }
+            });
+        });
+
+         $('#confirm-delete').click(function () {
+            const postIdToDelete = $('#deletePostModal').data('post-id');
+            const csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+
+            $.ajax({
+                url: `/delete-post/${postIdToDelete}/`,
+                type: "POST",
+                headers: { 'X-CSRFToken': csrfToken },
+                success: function (response) {
+                    console.log(`Post with ID ${response} successfully deleted`);
+                    postSocket.send(JSON.stringify({
+                        action: 'delete',
+                        post: response
+                    }));
+
+                    // Close the modal and show the success message
+                    $('#deletePostModal').modal('hide');
+                    showAlert('Post deleted successfully!', 'success');
+                },
+                error: function () {
+                    showAlert('Failed to delete post. Please try again.', 'danger');
+                }
+            });
+        });
+
+            $('#post-list').on('click', '.edit-post-btn', function () {
+            const postId = $(this).data('id');
+            const postTitle = $(this).data('title');
+            const postContent = $(this).data('content');
+            const data = $(this).data();  // Get all data attributes from the clicked element
+
+            console.log('Data object:', data);
+            console.log(`Editing post ID: ${postId}`);
+            console.log(`Post title: ${postTitle}`);
+            console.log(`Post content: ${postContent}`);
+
+            $('#edit-post-id').val(postId);
+            $('#edit-title').val(postTitle);
+            $('#edit-content').summernote('code', postContent);
+
+            $('#editPostModal').modal('show');
+        });
+
+        $('#editPostModal').on('shown.bs.modal', function () {
+            $('#edit-content').summernote({
+                height: 300,
+                focus: true
+            });
+
+            setTimeout(() => {
+            $('#edit-content').summernote('code', data.content);
+            }, 100);
+        });
+
+        $('#editPostModal').on('hidden.bs.modal', function () {
+            $('#edit-content').summernote('destroy');
+        });
+
+        $('#post-list').on('click', '.delete-post-btn', function () {
+            const postId = $(this).data('id');
+            $('#deletePostModal').data('post-id', postId).modal('show');
+        });
+    });
+</script>
+
 </body>
 </html>

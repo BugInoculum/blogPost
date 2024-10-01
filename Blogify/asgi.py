@@ -9,8 +9,21 @@ https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
 
 import os
 
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
+from django.urls import path
+from .consumers import CommentConsumer, PostConsumer
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Blogify.settings')
 
-application = get_asgi_application()
+application = ProtocolTypeRouter({
+    'http': get_asgi_application(),
+    'websocket': AuthMiddlewareStack(
+        URLRouter([
+            path('ws/comments/<int:post_id>/', CommentConsumer.as_asgi()),
+            path('ws/posts/', PostConsumer.as_asgi()),
+
+        ])
+    ),
+})

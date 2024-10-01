@@ -11,50 +11,31 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.18/summernote-bs4.min.js"></script>
 </head>
 <body>
-      {% include 'blog/partials/navbar.html' %}
+    {% include 'blog/partials/navbar.html' %}
 
     <div class="container mt-5">
         <h2>Create a Blog Post</h2>
-        <!--  Only for Admins -->
+        <!-- Post creation form -->
         <form id="create-post-form" method="POST">
-            <!-- CSRF Token -->
-            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-
+            {% csrf_token %}
             <div class="form-group">
                 <label for="title">Title</label>
-                <input type="text" class="form-control" id="title" name="title" maxlength="100" placeholder="Enter title" required>
-                <small id="titleHelp" class="form-text text-muted">Max 100 characters.</small>
+                <input type="text" class="form-control" id="title" name="title" maxlength="100" required>
             </div>
-
             <div class="form-group">
                 <label for="content">Content</label>
-                <textarea id="content" name="content" class="form-control summernote" placeholder="Write your post content here"></textarea>
+                <textarea id="content" name="content" class="form-control summernote" required></textarea>
             </div>
-
             <button type="submit" class="btn btn-primary mt-3">Submit Post</button>
         </form>
 
         <div id="post-success-message" class="alert alert-success mt-3" style="display: none;" role="alert">
             Post submitted successfully!
         </div>
-
-        <div id="post-list" class="mt-5">
-            <!-- Render existing posts initially -->
-            {% for post in posts %}
-            <div class="card mb-3" id="post-{{ post.id }}"  data-created-at="{{ post.created_at }}">
-                <div class="card-body">
-                    <h5 class="card-title">{{ post.title }}</h5>
-                    <p class="card-text">{{ post.content|safe }}</p>
-                    <p class="text-muted">Posted by {{ post.author.username }} on {{ post.created_at }}</p>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
     </div>
 
-  <script type="text/javascript">
+    <script type="text/javascript">
         $(document).ready(function () {
-            // Initialize Summernote
             $('.summernote').summernote({
                 height: 200
             });
@@ -64,52 +45,33 @@
 
                 let title = $('#title').val();
                 let content = $('#content').val();
-                let csrfToken = $('input[name="csrfmiddlewaretoken"]').val(); // CSRF token
+                let csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
 
-                // AJAX request
                 $.ajax({
                     url: "/create-post/",
                     type: "POST",
                     headers: { 'X-CSRFToken': csrfToken },
-                    data: {
-                        title: title,
-                        content: content
-                    },
+                    data: { title: title, content: content },
                     success: function (response) {
+                        // Broadcast the new post via WebSocket
+                        const postSocket = new WebSocket(`ws://${window.location.host}/ws/posts/`);
+                        postSocket.onopen = function () {
+                            postSocket.send(JSON.stringify({
+                                'action': 'create',
+                                'post': response  // Send the post response to WebSocket
+                            }));
+                        };
 
-                        if (response.id && response.title && response.content) {
-                            console.log("Valid response, adding post to #post-list");
-
-                            let post = `
-                                <div class="card mb-3" id="post-${response.id}">
-                                    <div class="card-body">
-                                        <h5 class="card-title">${response.title}</h5>
-                                        <p class="card-text"></p>
-                                        <p class="text-muted">Posted by ${response.author} on ${response.created_at}</p>
-                                    </div>
-                                </div>`;
-
-                            $('#post-list').prepend(post);
-
-                            $('#post-' + response.id).find('.card-text').html(response.content);
-
-                            console.log("New post added with content as HTML.");
-
-                            $('#post-success-message').show();
-                            $('#create-post-form')[0].reset();
-                        } else {
-                            console.log("Invalid response format:", response);
-                        }
+                        $('#post-success-message').show();
+                        $('#create-post-form')[0].reset();
                     },
                     error: function (error) {
-                        console.log("AJAX error:", error);
                         alert('Something went wrong.');
                     }
                 });
             });
         });
-
-</script>
+    </script>
 
 </body>
 </html>
