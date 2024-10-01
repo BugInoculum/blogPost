@@ -76,6 +76,11 @@ TEMPLATES = [
     },
 ]
 
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://blogpostdaphne-blogify-asgi-application.onrender.com',
+]
+
 LOGOUT_REDIRECT_URL = 'login'
 LOGIN_REDIRECT_URL = 'post_list'
 STATIC_URL = '/static/'
