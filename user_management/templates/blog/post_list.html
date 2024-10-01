@@ -137,12 +137,11 @@
             </div>`);
         }
 
-         function showAlert(message, type) {
-            $('#alerts-container').html(`<div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>`);
-        }
+          $(document).ajaxStart(function () {
+        $('.spinner-border').show(); // Show the spinner when an AJAX request starts
+            }).ajaxStop(function () {
+                $('.spinner-border').hide(); // Hide the spinner when all AJAX requests complete
+            });
 
         function addPostToPage(post) {
             const isAdmin = "{{ user.user_type }}" === "admin";
@@ -270,6 +269,9 @@
                 type: 'POST',
                 headers: { 'X-CSRFToken': csrfToken },
                 data: { content: content },
+                beforeSend: function () {
+                $('.spinner-border').show(); // Show the spinner before the request is sent
+            },
                 success: function (response) {
                     $(`#comment-content-${postId}`).val('');
                     showAlert('Comment added successfully!', 'success');
@@ -277,7 +279,10 @@
                 },
                 error: function () {
                     showAlert('Failed to add comment. Please try again.', 'danger');
-                }
+                },
+                complete: function () {
+                $('.spinner-border').hide(); // Hide the spinner after the request completes
+            }
             });
         });
 
@@ -296,6 +301,9 @@
                 type: "POST",
                 headers: { 'X-CSRFToken': csrfToken },
                 data: { title, content },
+                beforeSend: function () {
+                $('.spinner-border').show(); // Show the spinner before the request is sent
+                 },
                 success: function (response) {
                             console.log('Success response:', response);
 
@@ -308,7 +316,10 @@
                 },
                 error: function () {
                     showAlert('Failed to update post. Please try again.', 'danger');
-                }
+                },
+                 complete: function () {
+                $('.spinner-border').hide(); // Hide the spinner after the request completes
+            }
             });
         });
 
@@ -320,6 +331,9 @@
                 url: `/delete-post/${postIdToDelete}/`,
                 type: "POST",
                 headers: { 'X-CSRFToken': csrfToken },
+                beforeSend: function () {
+                $('.spinner-border').show(); // Show the spinner before the request is sent
+                 },
                 success: function (response) {
                     console.log(`Post with ID ${response} successfully deleted`);
                     postSocket.send(JSON.stringify({
@@ -333,7 +347,10 @@
                 },
                 error: function () {
                     showAlert('Failed to delete post. Please try again.', 'danger');
-                }
+                },
+                 complete: function () {
+                $('.spinner-border').hide(); // Hide the spinner after the request completes
+            }
             });
         });
 
