@@ -228,8 +228,8 @@
             $(`#comment-${commentId}`).remove();
         }
 
-        const postSocket = new WebSocket(`ws://${window.location.host}/ws/posts/`);
-        postSocket.onopen = function() {
+            const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+            const postSocket = new WebSocket(`${wsProtocol}${window.location.host}/ws/posts/`);        postSocket.onopen = function() {
             console.log("WebSocket connection established.");
         };
 

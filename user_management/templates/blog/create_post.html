@@ -54,7 +54,8 @@
                     data: { title: title, content: content },
                     success: function (response) {
                         // Broadcast the new post via WebSocket
-                        const postSocket = new WebSocket(`ws://${window.location.host}/ws/posts/`);
+                         const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+                        const postSocket = new WebSocket(`${wsProtocol}${window.location.host}/ws/posts/`);
                         postSocket.onopen = function () {
                             postSocket.send(JSON.stringify({
                                 'action': 'create',
