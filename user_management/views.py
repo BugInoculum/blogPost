@@ -202,9 +202,11 @@ def add_comment(request, post_id):
         if content:
             comment = Comment.objects.create(post=post, author=author, content=content)
             comment_data = {
+                'id': comment.id,
                 'author': comment.author.username,
                 'content': comment.content,
-                'created_at': comment.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                'post_id': post_id,
+                'created_at': comment.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             }
 
             # Notify via WebSocket

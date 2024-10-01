@@ -21,7 +21,7 @@ application = ProtocolTypeRouter({
     'http': get_asgi_application(),
     'websocket': AuthMiddlewareStack(
         URLRouter([
-            path('ws/comments/<int:post_id>/', CommentConsumer.as_asgi()),
+            path('ws/comments/', CommentConsumer.as_asgi()),
             path('ws/posts/', PostConsumer.as_asgi()),
 
         ])

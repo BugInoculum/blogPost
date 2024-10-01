@@ -63,9 +63,18 @@
                     <h6 class="mt-4">Comments</h6>
 
                     <!-- Comment List -->
-                    <div id="comments-{{ post.id }}" class="mb-3">
-                        <!-- Comments will be dynamically loaded here -->
-                    </div>
+                       <div id="comments-{{ post.id }}" class="mb-3">
+                            {% if post.comments.all %}
+                                {% for comment in post.comments.all %}
+                                <div class="comment">
+                                    <p><strong>{{ comment.author }}</strong> - {{ comment.content }}</p>
+                                    <small class="text-muted">{{ comment.created_at }}</small>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p>No comments yet.</p>
+                            {% endif %}
+                        </div>
 
                     <!-- Comment Form -->
                     {% if user.is_authenticated %}
@@ -171,7 +180,7 @@
                             <a href="/blog/${post.id}/">${post.title}</a>
                         </h5>
                         <p class="card-text">${post.content.slice(0, 20)}${post.content.length > 20 ? '...' : ''}</p>
-                        <p class="text-muted">Posted by ${post.author.username} on ${post.created_at}</p>
+                        <p class="text-muted">Posted by ${post.author} on ${post.created_at}</p>
                         ${editDeleteButtons}
                         ${commentSection}
                     </div>
@@ -203,18 +212,18 @@
             }
         }
 
-        function addCommentToPage(comment, postId) {
+        function addCommentToPage(comment) {
             const commentHtml = `
                 <div class="comment" id="comment-${comment.id}">
                     <p><strong>${comment.author}</strong> - ${comment.content}</p>
-                    <small class="text-muted">${comment.timestamp}</small>
+                    <small class="text-muted">${comment.created_at}</small>
                     ${comment.is_admin ? `
-                        <button class="btn btn-sm btn-warning edit-comment-btn" data-id="${comment.id}" data-post-id="${postId}" data-content="${comment.content}">Edit</button>
-                        <button class="btn btn-sm btn-danger delete-comment-btn" data-id="${comment.id}" data-post-id="${postId}">Delete</button>
+                        <button class="btn btn-sm btn-warning edit-comment-btn" data-id="${comment.id}" data-post-id="${comment.post_id}" data-content="${comment.content}">Edit</button>
+                        <button class="btn btn-sm btn-danger delete-comment-btn" data-id="${comment.id}" data-post-id="${comment.post_id}">Delete</button>
                     ` : ''}
                 </div>
             `;
-            $(`#comments-${postId}`).append(commentHtml);
+            $(`#comments-${comment.post_id}`).append(commentHtml);
         }
 
         function updateCommentOnPage(comment, postId) {
@@ -228,18 +237,14 @@
         }
 
             const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-            const postSocket = new WebSocket(`${wsProtocol}${window.location.host}/ws/posts/`);        postSocket.onopen = function() {
-            console.log("WebSocket connection established.");
-        };
+            const postSocket = new WebSocket(`${wsProtocol}${window.location.host}/ws/posts/`);
 
-        postSocket.onerror = function (error) {
-            console.error('WebSocket error:', error);
-        };
-        postSocket.onmessage = function (event) {
+
+            postSocket.onmessage = function (event) {
             const data = JSON.parse(event.data);
             const action = data.action;
             const post = data.post;
-             console.log("WebSocket message received: ", data);
+            console.log("WebSocket message received: ", data);
 
             if (action === 'create') {
                 addPostToPage(post);
@@ -253,6 +258,23 @@
         postSocket.onerror = function (error) {
             console.error('WebSocket error:', error);
         };
+
+        const commentSocket = new WebSocket(`${wsProtocol}${window.location.host}/ws/comments/`);
+        postSocket.onerror = function (error) {
+                console.error('WebSocket error:', error);
+            };
+        commentSocket.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        const comment = data.comment;
+        console.log("New comment received via WebSocket: ", comment);
+        addCommentToPage(comment);
+        };
+
+        // WebSocket error handler
+        commentSocket.onerror = function (error) {
+            console.error('WebSocket error:', error);
+        };
+
 
         $('#post-list').on('click', '.submit-comment-btn', function () {
             const postId = $(this).data('post-id');
@@ -275,7 +297,10 @@
                 success: function (response) {
                     $(`#comment-content-${postId}`).val('');
                     showAlert('Comment added successfully!', 'success');
-                    addCommentToPage(response.comment, postId);
+                    commentSocket.send(JSON.stringify({
+                    action: 'create',
+                    comment: response  // Sending the new comment data to WebSocket
+                }));
                 },
                 error: function () {
                     showAlert('Failed to add comment. Please try again.', 'danger');
